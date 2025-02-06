@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventAI - Smart Event Management</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .neubrutalism {
+            border: 3px solid #000;
+            box-shadow: 5px 5px 0px #000;
+            transition: all 0.2s ease;
+        }
+        .neubrutalism:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0px #000;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #000;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-[#f0f0f0]">
+    <div id="app" class="min-h-screen">
+        <!-- Auth Pages -->
+        <div v-if="!isLoggedIn" class="container mx-auto px-4 py-10">
+            <div class="max-w-md mx-auto">
+                <h1 class="text-4xl font-bold mb-8 text-center">EventAI</h1>
+                
+                <!-- Login Form -->
+                <div v-if="!showSignUp" class="bg-white p-6 neubrutalism">
+                    <h2 class="text-2xl font-bold mb-6">Sign In</h2>
+                    <form @submit.prevent="login">
+                        <input type="email" v-model="loginForm.email" placeholder="Email" class="w-full mb-4 p-3 neubrutalism">
+                        <input type="password" v-model="loginForm.password" placeholder="Password" class="w-full mb-4 p-3 neubrutalism">
+                        <button type="submit" class="w-full bg-[#00ff00] p-3 font-bold neubrutalism">Sign In</button>
+                    </form>
+                    <p class="mt-4 text-center">
+                        Don't have an account? 
+                        <button @click="showSignUp = true" class="font-bold underline">Sign Up</button>
+                    </p>
+                </div>
+
+                <!-- Register Form -->
+                <div v-else class="bg-white p-6 neubrutalism">
+                    <h2 class="text-2xl font-bold mb-6">Sign Up</h2>
+                    <form @submit.prevent="register">
+                        <input type="text" v-model="registerForm.name" placeholder="Full Name" class="w-full mb-4 p-3 neubrutalism">
+                        <input type="email" v-model="registerForm.email" placeholder="Email" class="w-full mb-4 p-3 neubrutalism">
+                        <input type="password" v-model="registerForm.password" placeholder="Password" class="w-full mb-4 p-3 neubrutalism">
+                        <button type="submit" class="w-full bg-[#00ff00] p-3 font-bold neubrutalism">Sign Up</button>
+                    </form>
+                    <p class="mt-4 text-center">
+                        Already have an account? 
+                        <button @click="showSignUp = false" class="font-bold underline">Sign In</button>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div v-else>
+            <!-- Navigation -->
+            <nav class="bg-white shadow-md p-4">
+                <div class="container mx-auto flex justify-between items-center">
+                    <div class="text-2xl font-bold">EventAI</div>
+                    <div class="flex gap-4">
+                        <button @click="currentView = 'home'" class="neubrutalism px-4 py-2" :class="{'bg-[#00ff00]': currentView === 'home'}">Home</button>
+                        <button @click="currentView = 'create'" class="neubrutalism px-4 py-2" :class="{'bg-[#00ff00]': currentView === 'create'}">Create Event</button>
+                        <button @click="currentView = 'profile'" class="neubrutalism px-4 py-2" :class="{'bg-[#00ff00]': currentView === 'profile'}">My Profile</button>
+                        <button @click="logout" class="neubrutalism px-4 py-2 bg-red-200">Logout</button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <div class="container mx-auto p-4">
+                <!-- Home View -->
+                <div v-if="currentView === 'home'">
+                    <div class="grid md:grid-cols-2 gap-8 mb-12">
+                        <div class="bg-white p-6 neubrutalism">
+                            <h2 class="text-2xl font-bold mb-4">AI Event Assistant</h2>
+                            <div class="chat-container h-64 overflow-y-auto mb-4 border p-4">
+                                <div v-for="msg in chatMessages" :key="msg.id" 
+                                     :class="{'text-right': msg.sender === 'user'}" class="mb-2">
+                                    <span class="inline-block bg-gray-100 p-2 rounded">{{ msg.text }}</span>
+                                </div>
+                            </div>
+                            <form @submit.prevent="sendMessage" class="flex gap-2">
+                                <input v-model="chatInput" type="text" placeholder="Ask about events..." 
+                                       class="flex-1 p-2 neubrutalism">
+                                <button type="submit" class="neubrutalism px-4 py-2 bg-[#00ff00]">Send</button>
+                            </form>
+                        </div>
+                        <div class="bg-white p-6 neubrutalism">
+                            <h2 class="text-2xl font-bold mb-4">Recommended Events</h2>
+                            <div v-if="loading" class="flex justify-center">
+                                <div class="loader"></div>
+                            </div>
+                            <div v-else class="space-y-4">
+                                <div v-for="event in recommendedEvents" :key="event.id" 
+                                     class="p-4 neubrutalism bg-gray-50">
+                                    <h3 class="font-bold">{{ event.name }}</h3>
+                                    <p>{{ event.description }}</p>
+                                    <button @click="registerForEvent(event)" 
+                                            class="mt-2 px-4 py-2 neubrutalism bg-[#00ff00]">
+                                        Register Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Event View -->
+                <div v-if="currentView === 'create'" class="max-w-2xl mx-auto">
+                    <div class="bg-white p-6 neubrutalism">
+                        <h2 class="text-2xl font-bold mb-6">Create New Event</h2>
+                        <form @submit.prevent="createEvent">
+                            <input v-model="eventForm.name" type="text" placeholder="Event Name" 
+                                   class="w-full mb-4 p-3 neubrutalism">
+                            <textarea v-model="eventForm.description" placeholder="Event Description" 
+                                      class="w-full mb-4 p-3 neubrutalism" rows="4"></textarea>
+                            <input v-model="eventForm.date" type="date" class="w-full mb-4 p-3 neubrutalism">
+                            <input v-model="eventForm.price" type="number" placeholder="Ticket Price (0 for free)" 
+                                   class="w-full mb-4 p-3 neubrutalism">
+                            <button type="submit" class="w-full bg-[#00ff00] p-3 font-bold neubrutalism">
+                                Create Event
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Profile View -->
+                <div v-if="currentView === 'profile'" class="max-w-2xl mx-auto">
+                    <div class="bg-white p-6 neubrutalism mb-8">
+                        <h2 class="text-2xl font-bold mb-6">My Profile</h2>
+                        <form @submit.prevent="updateProfile">
+                            <input v-model="profile.name" type="text" placeholder="Full Name" 
+                                   class="w-full mb-4 p-3 neubrutalism">
+                            <input v-model="profile.email" type="email" placeholder="Email" 
+                                   class="w-full mb-4 p-3 neubrutalism">
+                            <button type="submit" class="w-full bg-[#00ff00] p-3 font-bold neubrutalism">
+                                Update Profile
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="bg-white p-6 neubrutalism">
+                        <h2 class="text-2xl font-bold mb-6">My Tickets</h2>
+                        <div class="space-y-4">
+                            <div v-for="ticket in tickets" :key="ticket.id" 
+                                 class="p-4 neubrutalism bg-gray-50">
+                                <h3 class="font-bold">{{ ticket.eventName }}</h3>
+                                <p>Ticket ID: {{ ticket.id }}</p>
+                                <p>Date: {{ ticket.date }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    showSignUp: false,
+                    currentView: 'home',
+                    loading: false,
+                    loginForm: {
+                        email: '',
+                        password: ''
+                    },
+                    registerForm: {
+                        name: '',
+                        email: '',
+                        password: ''
+                    },
+                    eventForm: {
+                        name: '',
+                        description: '',
+                        date: '',
+                        price: 0
+                    },
+                    profile: {
+                        name: '',
+                        email: ''
+                    },
+                    chatInput: '',
+                    chatMessages: [],
+                    recommendedEvents: [],
+                    tickets: [],
+                    userId: 'user123',
+                    appSlug: 'eventai-app-123'
+                }
+            },
+            methods: {
+                async login() {
+                    this.loading = true
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'read',
+                                collection: 'users',
+                                conditions: {
+                                    email: this.loginForm.email,
+                                    password: this.loginForm.password
+                                }
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.result.length > 0) {
+                            this.isLoggedIn = true
+                            this.profile = data.result[0]
+                            this.loadUserData()
+                        } else {
+                            alert('Invalid credentials')
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error)
+                        alert('Login failed')
+                    }
+                    this.loading = false
+                },
+                async register() {
+                    this.loading = true
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'create',
+                                collection: 'users',
+                                data: this.registerForm
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            this.isLoggedIn = true
+                            this.profile = this.registerForm
+                            this.loadUserData()
+                        }
+                    } catch (error) {
+                        console.error('Registration error:', error)
+                        alert('Registration failed')
+                    }
+                    this.loading = false
+                },
+                logout() {
+                    this.isLoggedIn = false
+                    this.currentView = 'home'
+                },
+                async sendMessage() {
+                    if (!this.chatInput.trim()) return
+                    
+                    this.chatMessages.push({
+                        id: Date.now(),
+                        sender: 'user',
+                        text: this.chatInput
+                    })
+
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/ai', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messages: [{
+                                    role: 'user',
+                                    content: [{
+                                        type: 'text',
+                                        text: this.chatInput
+                                    }]
+                                }]
+                            })
+                        })
+                        const data = await response.json()
+                        this.chatMessages.push({
+                            id: Date.now(),
+                            sender: 'ai',
+                            text: data.message
+                        })
+                    } catch (error) {
+                        console.error('AI chat error:', error)
+                    }
+
+                    this.chatInput = ''
+                },
+                async createEvent() {
+                    this.loading = true
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'create',
+                                collection: 'events',
+                                data: {
+                                    ...this.eventForm,
+                                    organizerId: this.userId,
+                                    createdAt: new Date().toISOString()
+                                }
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            alert('Event created successfully')
+                            this.eventForm = {
+                                name: '',
+                                description: '',
+                                date: '',
+                                price: 0
+                            }
+                            this.currentView = 'home'
+                            this.loadUserData()
+                        }
+                    } catch (error) {
+                        console.error('Event creation error:', error)
+                        alert('Failed to create event')
+                    }
+                    this.loading = false
+                },
+                async loadUserData() {
+                    this.loading = true
+                    try {
+                        // Load recommended events
+                        const eventsResponse = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'read',
+                                collection: 'events'
+                            })
+                        })
+                        const eventsData = await eventsResponse.json()
+                        if (eventsData.success) {
+                            this.recommendedEvents = eventsData.result
+                        }
+
+                        // Load user tickets
+                        const ticketsResponse = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'read',
+                                collection: 'tickets',
+                                conditions: {
+                                    userId: this.userId
+                                }
+                            })
+                        })
+                        const ticketsData = await ticketsResponse.json()
+                        if (ticketsData.success) {
+                            this.tickets = ticketsData.result
+                        }
+                    } catch (error) {
+                        console.error('Error loading user data:', error)
+                    }
+                    this.loading = false
+                },
+                async registerForEvent(event) {
+                    this.loading = true
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'create',
+                                collection: 'tickets',
+                                data: {
+                                    userId: this.userId,
+                                    eventId: event._id,
+                                    eventName: event.name,
+                                    date: event.date,
+                                    purchasedAt: new Date().toISOString()
+                                }
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            alert('Successfully registered for event!')
+                            this.loadUserData()
+                        }
+                    } catch (error) {
+                        console.error('Event registration error:', error)
+                        alert('Failed to register for event')
+                    }
+                    this.loading = false
+                },
+                async updateProfile() {
+                    this.loading = true
+                    try {
+                        const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer S2jbpvcBqdMKDb53tYXii83zlJT2',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                appSlug: this.appSlug,
+                                action: 'update',
+                                collection: 'users',
+                                conditions: {
+                                    email: this.profile.email
+                                },
+                                data: this.profile
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.success) {
+                            alert('Profile updated successfully')
+                        }
+                    } catch (error) {
+                        console.error('Profile update error:', error)
+                        alert('Failed to update profile')
+                    }
+                    this.loading = false
+                }
+            },
+            mounted() {
+                // Check for existing session
+                const session = localStorage.getItem('eventai-session')
+                if (session) {
+                    this.isLoggedIn = true
+                    this.profile = JSON.parse(session)
+                    this.loadUserData()
+                }
+            },
+            watch: {
+                isLoggedIn(newValue) {
+                    if (newValue) {
+                        localStorage.setItem('eventai-session', JSON.stringify(this.profile))
+                    } else {
+                        localStorage.removeItem('eventai-session')
+                    }
+                }
+            }
+        }).mount('#app')
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
